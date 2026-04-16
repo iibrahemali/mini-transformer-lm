@@ -1,0 +1,24 @@
+How to run
+1. Install dependencies
+
+
+pip install -r requirements.txt
+2. Download the dataset
+
+
+curl -o data/shakespeare.txt \
+  https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt
+3. Train the model
+
+
+python -m src.train
+4. Start the API + frontend
+
+
+uvicorn api.main:app --reload --port 8000
+Then open http://localhost:8000/app — you'll get all 4 tabs:
+
+Generate — prompt + temperature/top-k sliders
+Attention — per-layer, per-head heatmap
+Training — live loss + perplexity charts (click Refresh)
+Model Info — architecture cards
