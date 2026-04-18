@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.data import CharTokenizer
+from src.data import load_tokenizer
 from src.generate import generate_text
 from src.model import MiniTransformer
 
@@ -42,7 +42,7 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 
 _model: MiniTransformer | None = None
-_tokenizer: CharTokenizer | None = None
+_tokenizer = None
 
 CHECKPOINT_PATH = "checkpoints/best.pt"
 TOKENIZER_PATH = "checkpoints/tokenizer.json"
@@ -54,7 +54,7 @@ def _load_model() -> bool:
     if not os.path.exists(CHECKPOINT_PATH) or not os.path.exists(TOKENIZER_PATH):
         return False
     try:
-        _tokenizer = CharTokenizer.load(TOKENIZER_PATH)
+        _tokenizer = load_tokenizer(TOKENIZER_PATH)
         ckpt = torch.load(CHECKPOINT_PATH, map_location="cpu", weights_only=False)
         _model = MiniTransformer(ckpt["config"])
         _model.load_state_dict(ckpt["model_state_dict"])
@@ -115,10 +115,10 @@ async def get_attention(req: AttentionRequest):
         _model(idx)
 
     weights = _model.get_attention_weights()
-    chars = list(text[: len(tokens)])
+    token_labels = [_tokenizer.itos.get(t, "?") for t in tokens]
 
     return {
-        "tokens": chars,
+        "tokens": token_labels,
         "n_layers": len(weights),
         "n_heads": _model.config.n_heads,
         "attention_weights": weights,   # [n_layers][n_heads][T][T]

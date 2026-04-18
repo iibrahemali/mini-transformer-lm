@@ -20,6 +20,8 @@ training:
 data:
   dataset_path: "data/shakespeare.txt"
   train_split: 0.9
+  tokenizer_type: "char"   # "char" or "bpe"
+  bpe_vocab_size: 1000     # only used when tokenizer_type: "bpe"
 
 checkpoint:
   dir: "checkpoints"
