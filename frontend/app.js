@@ -45,13 +45,36 @@ document.querySelectorAll(".tab").forEach(btn => {
   });
 });
 
+/* ── Model switcher ──────────────────────────────────────────────── */
+document.querySelectorAll(".switch-btn").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    const key = btn.dataset.model;
+    const badge = $("model-badge");
+    badge.textContent = "Switching…";
+    badge.className = "badge badge-loading";
+    try {
+      await apiFetch("/switch-model", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: key }),
+      });
+      document.querySelectorAll(".switch-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      await checkModel();
+    } catch (e) {
+      badge.textContent = e.message;
+      badge.className = "badge badge-error";
+    }
+  });
+});
+
 /* ── Model badge ─────────────────────────────────────────────────── */
 async function checkModel() {
   const badge = $("model-badge");
   try {
     const data = await apiFetch("/model-info");
     if (data.loaded) {
-      badge.textContent = `Model ready · ${data.num_params_fmt} params`;
+      badge.textContent = `${data.active_tokenizer.toUpperCase()} · ${data.num_params_fmt} params`;
       badge.className = "badge badge-ready";
     } else {
       badge.textContent = "Model not trained";

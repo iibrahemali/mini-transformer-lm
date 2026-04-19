@@ -14,7 +14,6 @@ import sys
 import torch
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -43,23 +42,36 @@ app.add_middleware(
 
 _model: MiniTransformer | None = None
 _tokenizer = None
+_active_model_key: str = "char"
 
-CHECKPOINT_PATH = "checkpoints/best.pt"
-TOKENIZER_PATH = "checkpoints/tokenizer.json"
-LOG_PATH = "checkpoints/training_log.json"
+MODELS = {
+    "char": {
+        "checkpoint": "checkpoints/char/best.pt",
+        "tokenizer":  "checkpoints/char/tokenizer.json",
+        "log":        "checkpoints/char/training_log.json",
+    },
+    "bpe": {
+        "checkpoint": "checkpoints/bpe/best.pt",
+        "tokenizer":  "checkpoints/bpe/tokenizer.json",
+        "log":        "checkpoints/bpe/training_log.json",
+    },
+}
 
 
-def _load_model() -> bool:
-    global _model, _tokenizer
-    if not os.path.exists(CHECKPOINT_PATH) or not os.path.exists(TOKENIZER_PATH):
+def _load_model(key: str = None) -> bool:
+    global _model, _tokenizer, _active_model_key
+    if key:
+        _active_model_key = key
+    paths = MODELS[_active_model_key]
+    if not os.path.exists(paths["checkpoint"]) or not os.path.exists(paths["tokenizer"]):
         return False
     try:
-        _tokenizer = load_tokenizer(TOKENIZER_PATH)
-        ckpt = torch.load(CHECKPOINT_PATH, map_location="cpu", weights_only=False)
+        _tokenizer = load_tokenizer(paths["tokenizer"])
+        ckpt = torch.load(paths["checkpoint"], map_location="cpu", weights_only=False)
         _model = MiniTransformer(ckpt["config"])
         _model.load_state_dict(ckpt["model_state_dict"])
         _model.eval()
-        print(f"Model loaded — {_model.num_params / 1e6:.2f}M params")
+        print(f"Loaded [{_active_model_key}] — {_model.num_params / 1e6:.2f}M params")
         return True
     except Exception as exc:
         print(f"Failed to load model: {exc}")
@@ -68,7 +80,9 @@ def _load_model() -> bool:
 
 @app.on_event("startup")
 async def startup():
-    _load_model()
+    # Try char first, fall back to bpe
+    if not _load_model("char"):
+        _load_model("bpe")
 
 
 # ---------------------------------------------------------------------------
@@ -86,9 +100,23 @@ class AttentionRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=512)
 
 
+class SwitchModelRequest(BaseModel):
+    model: str  # "char" or "bpe"
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+@app.post("/switch-model")
+async def switch_model(req: SwitchModelRequest):
+    if req.model not in MODELS:
+        raise HTTPException(status_code=400, detail=f"Unknown model '{req.model}'. Choose 'char' or 'bpe'.")
+    ok = _load_model(req.model)
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"No checkpoint found for '{req.model}'. Train it first.")
+    return {"status": "switched", "active": _active_model_key, "num_params": _model.num_params}
+
 
 @app.post("/generate")
 async def generate(req: GenerateRequest):
@@ -132,15 +160,16 @@ async def get_attention(req: AttentionRequest):
         "tokens": token_labels,
         "n_layers": len(weights),
         "n_heads": _model.config.n_heads,
-        "attention_weights": weights,   # [n_layers][n_heads][T][T]
+        "attention_weights": weights,
     }
 
 
 @app.get("/training-logs")
 async def get_training_logs():
-    if not os.path.exists(LOG_PATH):
+    log_path = MODELS[_active_model_key]["log"]
+    if not os.path.exists(log_path):
         return {"logs": [], "message": "No training log found. Run training first."}
-    with open(LOG_PATH) as f:
+    with open(log_path) as f:
         logs = json.load(f)
     return {"logs": logs}
 
@@ -153,6 +182,7 @@ async def get_model_info():
     cfg = _model.config
     return {
         "loaded": True,
+        "active_tokenizer": _active_model_key,
         "vocab_size": cfg.vocab_size,
         "block_size": cfg.block_size,
         "n_embd": cfg.n_embd,
@@ -166,11 +196,10 @@ async def get_model_info():
 
 @app.post("/reload")
 async def reload_model():
-    """Reload model from checkpoint after training."""
     ok = _load_model()
     if not ok:
         raise HTTPException(status_code=404, detail="No checkpoint found.")
-    return {"status": "reloaded"}
+    return {"status": "reloaded", "active": _active_model_key}
 
 
 # ---------------------------------------------------------------------------
