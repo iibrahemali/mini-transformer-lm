@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.data import load_tokenizer
-from src.generate import generate_text
+from src.generate import generate_text, generate_with_confidence
 from src.model import MiniTransformer
 
 # ---------------------------------------------------------------------------
@@ -96,6 +96,17 @@ async def generate(req: GenerateRequest):
         raise HTTPException(status_code=503, detail="Model not loaded. Train the model first.")
     result = generate_text(_model, _tokenizer, req.prompt, req.max_tokens, req.temperature, req.top_k)
     return {"generated": result}
+
+
+@app.post("/generate-with-confidence")
+async def generate_confidence(req: GenerateRequest):
+    if _model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded. Train the model first.")
+    tokens = generate_with_confidence(
+        _model, _tokenizer, req.prompt, req.max_tokens, req.temperature, req.top_k
+    )
+    max_entropy = max((t["entropy"] for t in tokens), default=1.0) or 1.0
+    return {"prompt": req.prompt, "tokens": tokens, "max_entropy": round(max_entropy, 4)}
 
 
 @app.post("/attention")

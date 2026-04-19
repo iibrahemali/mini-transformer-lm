@@ -253,6 +253,44 @@ textarea { resize: vertical; min-height: 90px; }
 .info-key   { font-size: .75rem; color: var(--muted); font-weight: 500; margin-bottom: .3rem; }
 .info-value { font-size: 1.1rem; font-weight: 700; }
 
+/* ── Confidence output ────────────────────────────────────────────── */
+.conf-output {
+  background: #0f172a;
+  font-family: var(--mono);
+  font-size: .9rem;
+  line-height: 2;
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  max-height: 340px;
+  overflow-y: auto;
+  word-break: break-all;
+}
+.conf-token {
+  display: inline;
+  border-radius: 3px;
+  padding: 1px 0;
+  white-space: pre;
+  cursor: default;
+}
+.conf-prompt-text {
+  color: #94a3b8;
+}
+
+.conf-legend {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  font-size: .8rem;
+  color: var(--muted);
+}
+.legend-label { white-space: nowrap; }
+.legend-bar {
+  flex: 1;
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(to right, #dc2626, #f59e0b, #16a34a);
+}
+
 /* ── Utility ──────────────────────────────────────────────────────── */
 .hidden { display: none !important; }
 

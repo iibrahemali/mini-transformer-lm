@@ -50,6 +50,59 @@ def generate_text(
     return tokenizer.decode(idx[0].tolist())
 
 
+def generate_with_confidence(
+    model,
+    tokenizer,
+    prompt: str,
+    max_tokens: int = 200,
+    temperature: float = 0.8,
+    top_k: int = 40,
+) -> list[dict]:
+    """Generate tokens and return per-token entropy (nats) as a confidence signal.
+
+    Low entropy = peaked distribution = model is confident.
+    High entropy = flat distribution = model is uncertain.
+    Returns a list of {"token": str, "entropy": float} dicts for generated tokens only.
+    """
+    device = next(model.parameters()).device
+    block_size = model.config.block_size
+
+    tokens = tokenizer.encode(prompt)
+    if not tokens:
+        tokens = [0]
+
+    idx = torch.tensor([tokens], dtype=torch.long, device=device)
+    results = []
+
+    model.eval()
+    with torch.no_grad():
+        for _ in range(max_tokens):
+            idx_cond = idx[:, -block_size:]
+            logits, _ = model(idx_cond)
+            logits = logits[:, -1, :] / max(temperature, 1e-8)
+
+            if top_k > 0:
+                top_vals, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                logits[logits < top_vals[:, [-1]]] = float("-inf")
+
+            probs = F.softmax(logits, dim=-1)
+
+            # Shannon entropy in nats over the (possibly top-k truncated) distribution
+            log_probs = F.log_softmax(logits, dim=-1)
+            entropy = -(probs * log_probs).sum(dim=-1).item()
+            # Guard against -inf * 0 = nan from masked-out tokens
+            if entropy != entropy:
+                entropy = 0.0
+
+            next_tok = torch.multinomial(probs, num_samples=1)
+            idx = torch.cat([idx, next_tok], dim=1)
+
+            tok_str = tokenizer.itos.get(next_tok.item(), "?")
+            results.append({"token": tok_str, "entropy": round(entropy, 4)})
+
+    return results
+
+
 def load_model_from_checkpoint(ckpt_path: str, tokenizer_path: str):
     from src.model import MiniTransformer
     from src.data import CharTokenizer

@@ -19,6 +19,7 @@
   <nav class="tabs">
     <button class="tab active" data-tab="generate">Generate</button>
     <button class="tab" data-tab="attention">Attention</button>
+    <button class="tab" data-tab="confidence">Confidence</button>
     <button class="tab" data-tab="training">Training</button>
     <button class="tab" data-tab="info">Model Info</button>
   </nav>
@@ -51,6 +52,47 @@
         <button id="gen-btn" class="btn-primary">Generate</button>
 
         <div id="gen-output" class="output-box hidden"></div>
+      </div>
+    </section>
+
+    <!-- ── CONFIDENCE ────────────────────────────────────────────────── -->
+    <section id="tab-confidence" class="tab-panel">
+      <div class="card">
+        <h2>Logit Confidence</h2>
+        <p class="info-msg">Each generated token is colored by the model's confidence. <strong style="color:#16a34a">Green</strong> = confident (peaked distribution). <strong style="color:#dc2626">Red</strong> = uncertain (flat distribution).</p>
+
+        <label>Prompt
+          <textarea id="conf-prompt" rows="3" placeholder="ROMEO:&#10;What light through yonder window breaks?"></textarea>
+        </label>
+
+        <div class="controls-row">
+          <label class="slider-label">
+            Temperature <span id="conf-temp-val">0.8</span>
+            <input type="range" id="conf-temp" min="0.1" max="2.0" step="0.05" value="0.8" />
+          </label>
+          <label class="slider-label">
+            Top-k <span id="conf-topk-val">40</span>
+            <input type="range" id="conf-topk" min="1" max="200" step="1" value="40" />
+          </label>
+          <label class="slider-label">
+            Max tokens <span id="conf-maxt-val">100</span>
+            <input type="range" id="conf-maxt" min="10" max="500" step="10" value="100" />
+          </label>
+        </div>
+
+        <button id="conf-btn" class="btn-primary">Generate</button>
+
+        <div id="conf-output" class="conf-output hidden"></div>
+
+        <div id="conf-legend" class="conf-legend hidden">
+          <span class="legend-label">Uncertain</span>
+          <div class="legend-bar"></div>
+          <span class="legend-label">Confident</span>
+        </div>
+
+        <div id="conf-chart-wrap" class="chart-wrap hidden">
+          <canvas id="conf-chart"></canvas>
+        </div>
       </div>
     </section>
 

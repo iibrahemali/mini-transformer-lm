@@ -6,6 +6,7 @@ const CELL = 28;         // attention heatmap cell size in px
 let attnData = null;     // last /attention response
 let lossChart = null;
 let pplChart  = null;
+let confChart = null;
 
 /* ── Helpers ─────────────────────────────────────────────────────── */
 const $ = id => document.getElementById(id);
@@ -60,6 +61,117 @@ async function checkModel() {
     badge.textContent = "API unreachable";
     badge.className = "badge badge-error";
   }
+}
+
+/* ── Confidence ──────────────────────────────────────────────────── */
+const confBtn = $("conf-btn");
+bindSlider("conf-temp", "conf-temp-val");
+bindSlider("conf-topk", "conf-topk-val");
+bindSlider("conf-maxt", "conf-maxt-val");
+
+confBtn.addEventListener("click", async () => {
+  const prompt = $("conf-prompt").value.trim();
+  if (!prompt) return;
+
+  $("conf-output").classList.add("hidden");
+  $("conf-legend").classList.add("hidden");
+  $("conf-chart-wrap").classList.add("hidden");
+  setLoading(confBtn, true);
+
+  try {
+    const data = await apiFetch("/generate-with-confidence", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt,
+        max_tokens: Number($("conf-maxt").value),
+        temperature: Number($("conf-temp").value),
+        top_k:       Number($("conf-topk").value),
+      }),
+    });
+
+    renderConfidence(data);
+  } catch (e) {
+    const out = $("conf-output");
+    out.textContent = "Error: " + e.message;
+    out.classList.remove("hidden");
+  } finally {
+    setLoading(confBtn, false);
+  }
+});
+
+function entropyToColor(entropy, maxEntropy) {
+  // 0 = confident (green), 1 = uncertain (red)
+  const t = Math.min(entropy / maxEntropy, 1);
+  // green #16a34a → yellow #f59e0b → red #dc2626
+  let r, g, b;
+  if (t < 0.5) {
+    const s = t * 2;
+    r = Math.round(22  + s * (245 - 22));
+    g = Math.round(163 + s * (158 - 163));
+    b = Math.round(74  + s * (11  - 74));
+  } else {
+    const s = (t - 0.5) * 2;
+    r = Math.round(245 + s * (220 - 245));
+    g = Math.round(158 + s * (38  - 158));
+    b = Math.round(11  + s * (38  - 11));
+  }
+  return `rgb(${r},${g},${b})`;
+}
+
+function renderConfidence(data) {
+  const out = $("conf-output");
+  out.innerHTML = "";
+
+  // Prompt text (static, grey)
+  const promptSpan = document.createElement("span");
+  promptSpan.className = "conf-prompt-text";
+  promptSpan.textContent = data.prompt;
+  out.appendChild(promptSpan);
+
+  const maxE = data.max_entropy;
+
+  data.tokens.forEach(({ token, entropy }) => {
+    const span = document.createElement("span");
+    span.className = "conf-token";
+    span.textContent = token;
+    span.style.color = entropyToColor(entropy, maxE);
+    span.title = `entropy: ${entropy.toFixed(3)} nats`;
+    out.appendChild(span);
+  });
+
+  out.classList.remove("hidden");
+  $("conf-legend").classList.remove("hidden");
+
+  // Entropy-over-time chart
+  if (confChart) confChart.destroy();
+  const labels = data.tokens.map((_, i) => i + 1);
+  const entropies = data.tokens.map(t => t.entropy);
+  const colors = entropies.map(e => entropyToColor(e, maxE));
+
+  confChart = new Chart($("conf-chart"), {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: "Entropy (nats)",
+        data: entropies,
+        backgroundColor: colors,
+        borderWidth: 0,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { display: false },
+        y: { title: { display: true, text: "Entropy (nats)" }, beginAtZero: true },
+      },
+    },
+  });
+
+  $("conf-chart-wrap").classList.remove("hidden");
 }
 
 /* ── Generate ────────────────────────────────────────────────────── */
