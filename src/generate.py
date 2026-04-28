@@ -87,12 +87,11 @@ def generate_with_confidence(
 
             probs = F.softmax(logits, dim=-1)
 
-            # Shannon entropy in nats over the (possibly top-k truncated) distribution
+            # Shannon entropy in nats over the (possibly top-k truncated) distribution.
+            # Use where() so masked tokens (prob=0, log_prob=-inf) contribute 0 instead of nan.
             log_probs = F.log_softmax(logits, dim=-1)
-            entropy = -(probs * log_probs).sum(dim=-1).item()
-            # Guard against -inf * 0 = nan from masked-out tokens
-            if entropy != entropy:
-                entropy = 0.0
+            safe_log_probs = torch.where(probs > 0, log_probs, torch.zeros_like(log_probs))
+            entropy = -(probs * safe_log_probs).sum(dim=-1).item()
 
             next_tok = torch.multinomial(probs, num_samples=1)
             idx = torch.cat([idx, next_tok], dim=1)
