@@ -1,5 +1,6 @@
 # mini-transformer-lm
 
+`Team: Ibrahem H. Ali, Kevin O. Bonsu` <br> `CS470: Deep Learning & Generative AI Prof. McDanel` <br>
 A decoder-only transformer language model trained on Shakespeare, with character-level and BPE tokenization comparison.
 
 ## Setup
